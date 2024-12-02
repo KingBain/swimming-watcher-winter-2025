@@ -3,7 +3,7 @@ name: Ping and Parse API
 on:
   schedule:
     - cron: '0 * * * *' # Runs every hour at the start of the hour
-    workflow_dispatch: # Allows the workflow to be triggered manually
+  workflow_dispatch: # Allows the workflow to be triggered manually
 
 jobs:
   ping_and_notify:
