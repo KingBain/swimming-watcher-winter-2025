@@ -1,0 +1,59 @@
+name: Ping and Parse API
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Runs every hour at the start of the hour
+    workflow_dispatch: # Allows the workflow to be triggered manually
+
+jobs:
+  ping_and_notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send POST request
+        id: send_request
+        run: |
+          # Define the API endpoint and simplified payload
+          API_URL="https://anc.ca.apm.activecommunities.com/ottawa/rest/activities/list?locale=en-US"
+          POST_DATA='{
+            "activity_search_pattern": {
+              "days_of_week": "0000000",
+              "activity_select_param": 2,
+              "center_ids": ["327"],
+              "open_spots": 1,
+              "for_map": false,
+              "season_ids": ["46"],
+              "activity_other_category_ids": ["8"],
+              "activity_keyword": "red"
+            }
+          }'
+
+          # Send the POST request and capture the response
+          RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "$POST_DATA" "$API_URL")
+          echo "response=$RESPONSE" >> $GITHUB_ENV
+
+      - name: Parse response and check total_records
+        run: |
+          echo "Checking if total_records is greater than 0..."
+          TOTAL_RECORDS=$(echo "$RESPONSE" | jq -r '.headers.page_info.total_records')
+          if [ "$TOTAL_RECORDS" -gt 0 ]; then
+            echo "Total records found: $TOTAL_RECORDS"
+          else
+            echo "No records found. Ending action cleanly."
+            exit 0
+          fi
+
+      - name: Parse and send messages for each activity
+        run: |
+          echo "Parsing activities and sending messages..."
+          jq -c '.body.activity_items[]' response.json | while read -r activity; do
+            NAME=$(echo "$activity" | jq -r '.name')
+            TIME=$(echo "$activity" | jq -r '.time_range')
+            DETAIL_URL=$(echo "$activity" | jq -r '.detail_url')
+            MESSAGE="*Activity Name:* $NAME\n*Time:* $TIME\n*Detail URL:* $DETAIL_URL"
+
+            # Echo the response to the console
+            echo "Sending message: $MESSAGE"
+
+            # Send the message using the messaging API
+            curl -s -X GET "https://api.callmebot.com/whatsapp.php?phone=${{ secrets.WHATSAPP_PHONE_NUMBER_NOTIFY }}&text=$(echo $MESSAGE | jq -sRr @uri)&apikey=${{ secrets.CALLMEBOT_APIKEY }}"
+          done
