@@ -35,7 +35,7 @@ jobs:
         run: |
           echo "Checking if total_records is greater than 0..."
           TOTAL_RECORDS=$(echo "$RESPONSE" | jq -r '.headers.page_info.total_records')
-          if [ "$TOTAL_RECORDS" -gt 0 ]; then
+          if [ "$TOTAL_RECORDS" -gt "0" ]; then
             echo "Total records found: $TOTAL_RECORDS"
           else
             echo "No records found. Ending action cleanly."
