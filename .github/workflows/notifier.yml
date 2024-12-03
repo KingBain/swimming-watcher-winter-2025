@@ -9,51 +9,42 @@ jobs:
   ping_and_notify:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
       - name: Send POST request
         id: send_request
         run: |
-          # Define the API endpoint and simplified payload
           API_URL="https://anc.ca.apm.activecommunities.com/ottawa/rest/activities/list?locale=en-US"
-          POST_DATA='{
-            "activity_search_pattern": {
-              "days_of_week": "0000000",
-              "activity_select_param": 2,
-              "center_ids": ["327"],
-              "open_spots": 1,
-              "for_map": false,
-              "season_ids": ["46"],
-              "activity_other_category_ids": ["8"],
-              "activity_keyword": "red"
-            }
-          }'
-
+          POST_DATA='{"activity_search_pattern": {"days_of_week": "0000000", "activity_select_param": 2, "center_ids": ["327"], "open_spots": 1, "for_map": false, "season_ids": ["46"], "activity_other_category_ids": ["8"], "activity_keyword": "red"}}'
+          
           # Send the POST request and capture the response
           RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "$POST_DATA" "$API_URL")
           echo "response=$RESPONSE" >> $GITHUB_ENV
 
       - name: Parse response and check total_records
+        id: parse_response
         run: |
-          echo "Checking if total_records is greater than 0..."
           TOTAL_RECORDS=$(echo "$RESPONSE" | jq -r '.headers.page_info.total_records')
-          if [ "$TOTAL_RECORDS" -gt "0" ]; then
-            echo "Total records found: $TOTAL_RECORDS"
-          else
-            echo "No records found. Ending action cleanly."
+          echo "Total records found: $TOTAL_RECORDS"
+          if [ -z "$TOTAL_RECORDS" ] || [ "$TOTAL_RECORDS" -eq 0 ]; then
+            echo "No records found. Ending action."
             exit 0
           fi
+          echo "total_records=$TOTAL_RECORDS" >> $GITHUB_ENV
 
       - name: Parse and send messages for each activity
+        if: steps.parse_response.outputs.total_records > 0
         run: |
-          echo "Parsing activities and sending messages..."
-          jq -c '.body.activity_items[]' response.json | while read -r activity; do
-            NAME=$(echo "$activity" | jq -r '.name')
-            TIME=$(echo "$activity" | jq -r '.time_range')
-            DETAIL_URL=$(echo "$activity" | jq -r '.detail_url')
+          echo "$RESPONSE" | jq -c '.body.activity_items[]' | while read -r i; do
+            NAME=$(echo "$i" | jq -r '.name')
+            TIME=$(echo "$i" | jq -r '.time_range')
+            DETAIL_URL=$(echo "$i" | jq -r '.detail_url')
             MESSAGE="*Activity Name:* $NAME\n*Time:* $TIME\n*Detail URL:* $DETAIL_URL"
 
-            # Echo the response to the console
+            # Echo the message to the console for debugging
             echo "Sending message: $MESSAGE"
 
-            # Send the message using the messaging API
+            # Send the message using the messaging API with URL encoding
             curl -s -X GET "https://api.callmebot.com/whatsapp.php?phone=${{ secrets.WHATSAPP_PHONE_NUMBER_NOTIFY }}&text=$(echo $MESSAGE | jq -sRr @uri)&apikey=${{ secrets.CALLMEBOT_APIKEY }}"
           done
