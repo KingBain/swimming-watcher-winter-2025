@@ -3,7 +3,12 @@ name: Ping and Parse API
 on:
   schedule:
     - cron: '0 * * * *' # Runs every hour at the start of the hour
-  workflow_dispatch: # Allows the workflow to be triggered manually
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Enable dry run to simulate the API call without sending a real request.'
+        required: true
+        default: 'false'
 
 jobs:
   ping_and_notify:
@@ -18,8 +23,13 @@ jobs:
           API_URL="https://anc.ca.apm.activecommunities.com/ottawa/rest/activities/list?locale=en-US"
           POST_DATA='{"activity_search_pattern": {"days_of_week": "0000000", "activity_select_param": 2, "center_ids": ["327"], "open_spots": 1, "for_map": false, "season_ids": ["46"], "activity_other_category_ids": ["8"], "activity_keyword": "red"}}'
           
-          # Send the POST request and capture the response
-          RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "$POST_DATA" "$API_URL")
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            echo "Dry run enabled, simulating API response..."
+            RESPONSE='{"headers": {"page_info": {"total_records": 2}}, "body": {"activity_items": [{"name": "Yoga Class", "time_range": "9:00 AM - 10:00 AM", "detail_url": "http://example.com/yoga"}]}}'
+          else
+            # Send the POST request and capture the response
+            RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "$POST_DATA" "$API_URL")
+          fi
           echo "response=$RESPONSE" >> $GITHUB_ENV
 
       - name: Parse response and check total_records
