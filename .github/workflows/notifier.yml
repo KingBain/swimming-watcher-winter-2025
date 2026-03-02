@@ -99,7 +99,7 @@ jobs:
 
           # 2. Calculate statistics strictly and safely
           TOTAL_CLASSES=$(jq -r '.body.activity_items // [] | length' api_response.json)
-          OPEN_CLASSES=$(jq -r '[.body.activity_items // [] | .[] | select((.action_link // null) != null)] | length' api_response.json)
+          OPEN_CLASSES=$(jq -r '[.body.activity_items // [] | .[] | select((.action_link.href // "") != "")] | length' api_response.json)
 
           TOTAL_CLASSES=${TOTAL_CLASSES:-0}
           OPEN_CLASSES=${OPEN_CLASSES:-0}
@@ -284,7 +284,7 @@ jobs:
         if: steps.parse_response.outputs.open_classes > 0
         run: |
           # Loop strictly through items that expose an enrollment action link
-          jq -c '.body.activity_items // [] | .[] | select((.action_link // null) != null)' api_response.json | while read -r i; do
+          jq -c '.body.activity_items // [] | .[] | select((.action_link.href // "") != "")' api_response.json | while read -r i; do
             NAME=$(echo "$i" | jq -r '.name')
             DOW=$(echo "$i" | jq -r '.days_of_week')
             DATES=$(echo "$i" | jq -r '.date_range')
