@@ -99,7 +99,7 @@ jobs:
 
           # 2. Calculate statistics strictly and safely
           TOTAL_CLASSES=$(jq -r '.body.activity_items // [] | length' api_response.json)
-          OPEN_CLASSES=$(jq -r '[.body.activity_items // [] | .[] | select((.total_open // 0) > (.already_enrolled // 0))] | length' api_response.json)
+          OPEN_CLASSES=$(jq -r '[.body.activity_items // [] | .[] | select((.action_link // null) != null)] | length' api_response.json)
 
           TOTAL_CLASSES=${TOTAL_CLASSES:-0}
           OPEN_CLASSES=${OPEN_CLASSES:-0}
@@ -283,20 +283,18 @@ jobs:
       - name: Parse and send messages for available activities
         if: steps.parse_response.outputs.open_classes > 0
         run: |
-          # Loop strictly through items where capacity > enrolled
-          jq -c '.body.activity_items // [] | .[] | select((.total_open // 0) > (.already_enrolled // 0))' api_response.json | while read -r i; do
+          # Loop strictly through items that expose an enrollment action link
+          jq -c '.body.activity_items // [] | .[] | select((.action_link // null) != null)' api_response.json | while read -r i; do
             NAME=$(echo "$i" | jq -r '.name')
             DOW=$(echo "$i" | jq -r '.days_of_week')
             DATES=$(echo "$i" | jq -r '.date_range')
             TIME=$(echo "$i" | jq -r '.time_range')
             DETAIL_URL=$(echo "$i" | jq -r '.detail_url')
-
-            # Calculate exactly how many spots are left
-            SPOTS_LEFT=$(echo "$i" | jq -r '(.total_open // 0) - (.already_enrolled // 0)')
+            ENROLL_URL=$(echo "$i" | jq -r '.action_link.href // empty')
 
             # Message formatted for WhatsApp readability
-            MESSAGE=$(printf "🚨 *OPENING FOUND!*\n*Class:* %s\n*Days:* %s\n*Dates:* %s\n*Time:* %s\n*Spots Available:* %s\n*Link:* %s" \
-              "$NAME" "$DOW" "$DATES" "$TIME" "$SPOTS_LEFT" "$DETAIL_URL")
+            MESSAGE=$(printf "🚨 *OPENING FOUND!*\n*Class:* %s\n*Days:* %s\n*Dates:* %s\n*Time:* %s\n*Details:* %s\n*Enroll:* %s" \
+              "$NAME" "$DOW" "$DATES" "$TIME" "$DETAIL_URL" "$ENROLL_URL")
 
             echo -e "Sending opening alert:\n$MESSAGE\n---"
 
